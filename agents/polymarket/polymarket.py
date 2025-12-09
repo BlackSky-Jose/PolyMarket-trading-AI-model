@@ -295,37 +295,6 @@ class Polymarket:
             markets.append(market)
         return markets
 
-    def get_trending_markets(self, limit: int = 10) -> "list[SimpleMarket]":
-        """
-        Get trending markets sorted by 24-hour volume.
-        Markets are sorted by volume24hr in descending order.
-        """
-        markets = []
-        res = httpx.get(self.gamma_markets_endpoint, params={
-            "active": True,
-            "closed": False,
-            "archived": False,
-            "limit": limit * 2,  # Fetch more to filter and sort
-        })
-        if res.status_code == 200:
-            market_data_list = res.json()
-            # Sort by volume24hr (or volume24hrClob if available) in descending order
-            market_data_list.sort(
-                key=lambda x: (
-                    x.get("volume24hrClob") or x.get("volume24hr") or x.get("volume") or 0
-                ),
-                reverse=True
-            )
-            # Take top N markets
-            for market in market_data_list[:limit]:
-                try:
-                    market_data = self.map_api_to_market(market)
-                    markets.append(SimpleMarket(**market_data))
-                except Exception as e:
-                    print(e)
-                    pass
-        return markets
-
     def get_orderbook(self, token_id: str) -> OrderBookSummary:
         return self.client.get_order_book(token_id)
 

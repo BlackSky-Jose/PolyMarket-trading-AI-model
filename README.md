@@ -659,11 +659,7 @@ For questions, support, or inquiries:
 
 Enjoy using the CLI application! If you encounter any issues, feel free to open an issue on the repository or reach out through the contact channels above.
 
-## Terms of Service
-
-[Terms of Service](https://polymarket.com/tos) prohibit US persons and persons from certain other jurisdictions from trading on Polymarket (via UI & API and including agents developed by persons in restricted jurisdictions), although data and information is viewable globally.
-
-**⚠️ Important Legal Notice**: Before using this software for trading, please review and comply with:
+**Important Legal Notice**: Before using this software for trading, please review and comply with:
 - Polymarket Terms of Service
 - Your local jurisdiction's regulations regarding prediction markets
 - Cryptocurrency trading regulations in your area
