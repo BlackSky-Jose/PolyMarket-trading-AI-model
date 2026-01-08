@@ -14,6 +14,7 @@ from agents.connectors.chroma import PolymarketRAG as Chroma
 from agents.utils.objects import SimpleEvent, SimpleMarket
 from agents.application.prompts import Prompter
 from agents.polymarket.polymarket import Polymarket
+from agents.utils.history import get_history_logger
 
 logger = logging.getLogger(__name__)
 
@@ -52,20 +53,60 @@ class Executor:
         self.polymarket = Polymarket()
 
     def get_llm_response(self, user_input: str) -> str:
-        system_message = SystemMessage(content=str(self.prompter.market_analyst()))
-        human_message = HumanMessage(content=user_input)
-        messages = [system_message, human_message]
-        result = self.llm.invoke(messages)
-        return result.content
+        history = get_history_logger()
+        try:
+            system_message = SystemMessage(content=str(self.prompter.market_analyst()))
+            human_message = HumanMessage(content=user_input)
+            messages = [system_message, human_message]
+            result = self.llm.invoke(messages)
+            response = result.content
+            # Log to MongoDB
+            history.log_llm_query(
+                query_type="ask_llm",
+                user_input=user_input,
+                response=response,
+                model=self.llm.model_name if hasattr(self.llm, "model_name") else None,
+                success=True,
+            )
+            return response
+        except Exception as e:
+            error_msg = str(e)
+            history.log_llm_query(
+                query_type="ask_llm",
+                user_input=user_input,
+                success=False,
+                error=error_msg,
+            )
+            raise
 
     def get_superforecast(
         self, event_title: str, market_question: str, outcome: str
     ) -> str:
-        messages = self.prompter.superforecaster(
-            description=event_title, question=market_question, outcome=outcome
-        )
-        result = self.llm.invoke(messages)
-        return result.content
+        history = get_history_logger()
+        try:
+            messages = self.prompter.superforecaster(
+                description=event_title, question=market_question, outcome=outcome
+            )
+            result = self.llm.invoke(messages)
+            response = result.content
+            # Log to MongoDB
+            history.log_llm_query(
+                query_type="ask_superforecaster",
+                user_input=f"Event: {event_title}, Question: {market_question}, Outcome: {outcome}",
+                response=response,
+                model=self.llm.model_name if hasattr(self.llm, "model_name") else None,
+                success=True,
+            )
+            return response
+        except Exception as e:
+            error_msg = str(e)
+            history.log_llm_query(
+                query_type="ask_superforecaster",
+                user_input=f"Event: {event_title}, Question: {market_question}, Outcome: {outcome}",
+                success=False,
+                error=error_msg,
+            )
+            raise
 
 
     def estimate_tokens(self, text: str) -> int:
@@ -90,43 +131,64 @@ class Executor:
         return [original_list[j:j+sublist_size] for j in range(0, len(original_list), sublist_size)]
     
     def get_polymarket_llm(self, user_input: str) -> str:
-        data1 = self.gamma.get_current_events()
-        data2 = self.gamma.get_current_markets()
-        
-        combined_data = str(self.prompter.prompts_polymarket(data1=data1, data2=data2))
-        
-        # Estimate total tokens
-        total_tokens = self.estimate_tokens(combined_data)
-        
-        # Set a token limit (adjust as needed, leaving room for system and user messages)
-        token_limit = self.token_limit
-        if total_tokens <= token_limit:
-            # If within limit, process normally
-            return self.process_data_chunk(data1, data2, user_input)
-        else:
-            # If exceeding limit, process in chunks
-            logger.info(f'Total tokens {total_tokens} exceeding LLM capacity, splitting into chunks')
-            group_size = (total_tokens // token_limit) + 1
-            useful_keys = [
-                'id', 'questionID', 'description', 'liquidity', 'clobTokenIds',
-                'outcomes', 'outcomePrices', 'volume', 'startDate', 'endDate',
-                'question', 'events'
-            ]
-            data1 = retain_keys(data1, useful_keys)
-            cut_1 = self.divide_list(data1, group_size)
-            cut_2 = self.divide_list(data2, group_size)
-            cut_data_12 = zip(cut_1, cut_2)
-
-            results = []
-
-            for cut_data in cut_data_12:
-                sub_data1 = cut_data[0]
-                sub_data2 = cut_data[1]
-                result = self.process_data_chunk(sub_data1, sub_data2, user_input)
-                results.append(result)
+        history = get_history_logger()
+        try:
+            data1 = self.gamma.get_current_events()
+            data2 = self.gamma.get_current_markets()
             
-            combined_result = " ".join(results)
-            return combined_result
+            combined_data = str(self.prompter.prompts_polymarket(data1=data1, data2=data2))
+            
+            # Estimate total tokens
+            total_tokens = self.estimate_tokens(combined_data)
+            
+            # Set a token limit (adjust as needed, leaving room for system and user messages)
+            token_limit = self.token_limit
+            if total_tokens <= token_limit:
+                # If within limit, process normally
+                response = self.process_data_chunk(data1, data2, user_input)
+            else:
+                # If exceeding limit, process in chunks
+                logger.info(f'Total tokens {total_tokens} exceeding LLM capacity, splitting into chunks')
+                group_size = (total_tokens // token_limit) + 1
+                useful_keys = [
+                    'id', 'questionID', 'description', 'liquidity', 'clobTokenIds',
+                    'outcomes', 'outcomePrices', 'volume', 'startDate', 'endDate',
+                    'question', 'events'
+                ]
+                data1 = retain_keys(data1, useful_keys)
+                cut_1 = self.divide_list(data1, group_size)
+                cut_2 = self.divide_list(data2, group_size)
+                cut_data_12 = zip(cut_1, cut_2)
+
+                results = []
+
+                for cut_data in cut_data_12:
+                    sub_data1 = cut_data[0]
+                    sub_data2 = cut_data[1]
+                    result = self.process_data_chunk(sub_data1, sub_data2, user_input)
+                    results.append(result)
+                
+                response = " ".join(results)
+            
+            # Log to MongoDB
+            history.log_llm_query(
+                query_type="ask_polymarket_llm",
+                user_input=user_input,
+                response=response,
+                model=self.llm.model_name if hasattr(self.llm, "model_name") else None,
+                tokens_used=total_tokens,
+                success=True,
+            )
+            return response
+        except Exception as e:
+            error_msg = str(e)
+            history.log_llm_query(
+                query_type="ask_polymarket_llm",
+                user_input=user_input,
+                success=False,
+                error=error_msg,
+            )
+            raise
     def filter_events(self, events: "list[SimpleEvent]") -> str:
         prompt = self.prompter.filter_events(events)
         result = self.llm.invoke(prompt)

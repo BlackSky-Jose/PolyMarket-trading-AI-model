@@ -5,6 +5,7 @@ from pathlib import Path
 from agents.application.executor import Executor as Agent
 from agents.polymarket.gamma import GammaMarketClient as Gamma
 from agents.polymarket.polymarket import Polymarket
+from agents.utils.history import get_history_logger
 
 logger = logging.getLogger(__name__)
 
@@ -39,23 +40,37 @@ class Trader:
         then executes that trade without any human intervention
 
         """
+        history = get_history_logger()
         try:
             self.pre_trade_logic()
 
             events = self.polymarket.get_all_tradeable_events()
-            logger.info(f"1. FOUND {len(events)} EVENTS")
+            events_count = len(events)
+            logger.info(f"1. FOUND {events_count} EVENTS")
 
             filtered_events = self.agent.filter_events_with_rag(events)
-            logger.info(f"2. FILTERED {len(filtered_events)} EVENTS")
+            filtered_events_count = len(filtered_events) if isinstance(filtered_events, list) else 0
+            logger.info(f"2. FILTERED {filtered_events_count} EVENTS")
 
             markets = self.agent.map_filtered_events_to_markets(filtered_events)
-            logger.info(f"3. FOUND {len(markets)} MARKETS")
+            markets_count = len(markets)
+            logger.info(f"3. FOUND {markets_count} MARKETS")
 
             filtered_markets = self.agent.filter_markets(markets)
-            logger.info(f"4. FILTERED {len(filtered_markets)} MARKETS")
+            filtered_markets_count = len(filtered_markets) if isinstance(filtered_markets, list) else 0
+            logger.info(f"4. FILTERED {filtered_markets_count} MARKETS")
 
             if not filtered_markets:
                 logger.warning("No markets found after filtering")
+                history.log_trade_operation(
+                    operation_type="one_best_trade",
+                    events_count=events_count,
+                    markets_count=markets_count,
+                    filtered_events_count=filtered_events_count,
+                    filtered_markets_count=filtered_markets_count,
+                    success=False,
+                    error="No markets found after filtering",
+                )
                 return
 
             market = filtered_markets[0]
@@ -67,8 +82,35 @@ class Trader:
             # trade = self.polymarket.execute_market_order(market, amount)
             # logger.info(f"6. TRADED {trade}")
 
+            # Log successful trade operation
+            market_id = None
+            market_data = None
+            if hasattr(market[0], "dict"):
+                market_dict = market[0].dict()
+                market_id = market_dict.get("metadata", {}).get("id") if isinstance(market_dict.get("metadata"), dict) else None
+                market_data = market_dict
+
+            history.log_trade_operation(
+                operation_type="one_best_trade",
+                market_id=str(market_id) if market_id else None,
+                market_data=market_data,
+                events_count=events_count,
+                markets_count=markets_count,
+                filtered_events_count=filtered_events_count,
+                filtered_markets_count=filtered_markets_count,
+                best_trade=best_trade,
+                amount=amount,
+                success=True,
+            )
+
         except Exception as e:
-            logger.error(f"Error in one_best_trade: {e}", exc_info=True)
+            error_msg = str(e)
+            logger.error(f"Error in one_best_trade: {error_msg}", exc_info=True)
+            history.log_trade_operation(
+                operation_type="one_best_trade",
+                success=False,
+                error=error_msg,
+            )
             logger.info("Retrying...")
             self.one_best_trade()
 

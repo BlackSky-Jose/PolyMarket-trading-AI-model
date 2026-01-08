@@ -3,6 +3,7 @@ import logging
 from agents.application.executor import Executor as Agent
 from agents.polymarket.gamma import GammaMarketClient as Gamma
 from agents.polymarket.polymarket import Polymarket
+from agents.utils.history import get_history_logger
 
 logger = logging.getLogger(__name__)
 
@@ -21,25 +22,45 @@ class Creator:
         then executes that trade without any human intervention
 
         """
+        history = get_history_logger()
         try:
             events = self.polymarket.get_all_tradeable_events()
-            logger.info(f"1. FOUND {len(events)} EVENTS")
+            events_count = len(events)
+            logger.info(f"1. FOUND {events_count} EVENTS")
 
             filtered_events = self.agent.filter_events_with_rag(events)
-            logger.info(f"2. FILTERED {len(filtered_events)} EVENTS")
+            filtered_events_count = len(filtered_events) if isinstance(filtered_events, list) else 0
+            logger.info(f"2. FILTERED {filtered_events_count} EVENTS")
 
             markets = self.agent.map_filtered_events_to_markets(filtered_events)
-            logger.info(f"3. FOUND {len(markets)} MARKETS")
+            markets_count = len(markets)
+            logger.info(f"3. FOUND {markets_count} MARKETS")
 
             filtered_markets = self.agent.filter_markets(markets)
-            logger.info(f"4. FILTERED {len(filtered_markets)} MARKETS")
+            filtered_markets_count = len(filtered_markets) if isinstance(filtered_markets, list) else 0
+            logger.info(f"4. FILTERED {filtered_markets_count} MARKETS")
 
             best_market = self.agent.source_best_market_to_create(filtered_markets)
             logger.info(f"5. IDEA FOR NEW MARKET {best_market}")
+            
+            # Log to MongoDB
+            history.log_market_creation(
+                market_description=best_market,
+                events_count=events_count,
+                markets_count=markets_count,
+                filtered_events_count=filtered_events_count,
+                filtered_markets_count=filtered_markets_count,
+                success=True,
+            )
             return best_market
 
         except Exception as e:
-            logger.error(f"Error in one_best_market: {e}", exc_info=True)
+            error_msg = str(e)
+            logger.error(f"Error in one_best_market: {error_msg}", exc_info=True)
+            history.log_market_creation(
+                success=False,
+                error=error_msg,
+            )
             logger.info("Retrying...")
             self.one_best_market()
 

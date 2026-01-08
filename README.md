@@ -145,20 +145,68 @@ This project requires **Python 3.12+**.
    # Required for AI features
    OPENAI_API_KEY="your_openai_api_key_here"
    
+   # Required for MongoDB (running history storage)
+   MONGODB_URI="mongodb://localhost:27017/"
+   MONGODB_DATABASE="polymarket_agent"
+   
    # Optional - for news integration
    NEWSAPI_API_KEY="your_newsapi_key_here"
    
    # Optional - for web search
    TAVILY_API_KEY="your_tavily_key_here"
    ```
-
+   
    **Important Notes:**
    - Never commit your `.env` file to version control
    - Keep your `POLYGON_WALLET_PRIVATE_KEY` secure and never share it
+   - MongoDB is used to store running history (CLI commands, trades, LLM queries, etc.)
+   - If MongoDB is not available, the application will continue to work but history won't be saved
    - You can get a NewsAPI key from [newsapi.org](https://newsapi.org/)
    - You can get a Tavily key from [tavily.com](https://tavily.com/)
 
-6. **Load your wallet with USDC** (if trading)
+6. **Set up MongoDB (for running history)**
+
+   MongoDB is used to store all running history including:
+   - CLI command executions
+   - Trading operations
+   - LLM queries and responses
+   - Market queries
+   - RAG operations
+   - News queries
+   - Market creation attempts
+   
+   **Option A: Local MongoDB**
+   
+   Install MongoDB locally:
+   - **Windows**: Download from [mongodb.com](https://www.mongodb.com/try/download/community)
+   - **macOS**: `brew install mongodb-community`
+   - **Linux**: `sudo apt-get install mongodb` or follow [MongoDB installation guide](https://www.mongodb.com/docs/manual/installation/)
+   
+   Start MongoDB:
+   ```bash
+   # Windows
+   mongod
+   
+   # macOS/Linux
+   sudo systemctl start mongod
+   # or
+   mongod
+   ```
+   
+   **Option B: MongoDB Atlas (Cloud)**
+   
+   For cloud-hosted MongoDB:
+   1. Sign up at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+   2. Create a free cluster
+   3. Get your connection string
+   4. Update `MONGODB_URI` in your `.env` file:
+      ```env
+      MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/"
+      ```
+   
+   **Note**: If MongoDB is not configured or unavailable, the application will continue to work normally, but running history will not be saved.
+
+7. **Load your wallet with USDC** (if trading)
    
    Before executing trades, ensure your Polygon wallet has sufficient USDC balance for trading.
 
@@ -598,6 +646,27 @@ Run tests:
 pytest
 ```
 
+## MongoDB History Storage
+
+All running history is automatically saved to MongoDB when the application runs. The following collections are created:
+
+- **`cli_history`**: All CLI command executions with parameters and results
+- **`trade_history`**: Trading operations including event/market filtering and trade calculations
+- **`llm_history`**: All LLM queries (ask_llm, ask_polymarket_llm, superforecaster) with inputs and responses
+- **`market_query_history`**: Market and event queries (get_all_markets, get_trending_markets, get_all_events)
+- **`rag_history`**: RAG operations (create_local_markets_rag, query_local_markets_rag)
+- **`news_query_history`**: News API queries with keywords and article summaries
+- **`market_creation_history`**: Market creation attempts and generated market descriptions
+
+Each document includes:
+- Timestamp of the operation
+- Success/failure status
+- Error messages (if any)
+- Relevant parameters and results
+- Operation-specific metadata
+
+**Note**: If MongoDB is not available, the application will continue to work normally, but history will not be saved. Check logs for MongoDB connection status.
+
 ## Architecture
 
 The Polymarket Agents architecture features modular components that can be maintained and extended by individual community members.
@@ -607,6 +676,8 @@ The Polymarket Agents architecture features modular components that can be maint
 Polymarket Agents connectors standardize data sources and order types.
 
 - **`Chroma.py`**: Chroma DB for vectorizing news sources and other API data. Developers are able to add their own vector database implementations.
+
+- **`mongodb.py`**: MongoDB connector for storing running history. Handles all database operations for logging CLI commands, trades, LLM queries, and other operations.
 
 - **`Gamma.py`**: Defines `GammaMarketClient` class, which interfaces with the Polymarket Gamma API to fetch and parse market and event metadata. Methods to retrieve current and tradable markets, as well as defined information on specific markets and events.
 
