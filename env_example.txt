@@ -1,0 +1,18 @@
+# PolyMarket Trading AI Model - Environment Variables
+# Copy this to .env and fill in your actual values
+
+# Required for trading
+POLYGON_WALLET_PRIVATE_KEY=your_private_key_here
+
+# Required for AI features
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Optional - MongoDB for running history storage
+MONGODB_URI=mongodb://localhost:27017/
+MONGODB_DATABASE=polymarket_agent
+
+# Optional - for news integration
+NEWSAPI_API_KEY=your_newsapi_key_here
+
+# Optional - for web search
+TAVILY_API_KEY=your_tavily_key_here
