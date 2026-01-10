@@ -110,21 +110,27 @@ This project requires **Python 3.12+**.
 4. **Install the project**
 
    Using pip:
-   
+
    ```bash
    pip install -e .
    ```
-   
+
+   With BlockRun x402 support (recommended):
+
+   ```bash
+   pip install -e ".[blockrun]"
+   ```
+
    Or with development dependencies:
-   
+
    ```bash
    pip install -e ".[dev]"
    ```
-   
+
    Using uv (faster):
-   
+
    ```bash
-   uv pip install -e ".[dev]"
+   uv pip install -e ".[blockrun,dev]"
    ```
 
 5. **Set up environment variables**
@@ -137,28 +143,35 @@ This project requires **Python 3.12+**.
    ```
    
    Add the following environment variables:
-   
+
    ```env
-   # Required for trading
+   # Required for trading (Polygon USDC)
    POLYGON_WALLET_PRIVATE_KEY="your_private_key_here"
-   
-   # Required for AI features
+
+   # LLM API - Choose ONE option:
+
+   # Option 1: BlockRun x402 pay-per-request (recommended)
+   # No API key management, pay only for what you use via USDC on Base
+   BLOCKRUN_WALLET_KEY="your_base_wallet_private_key_here"
+
+   # Option 2: Direct OpenAI API
    OPENAI_API_KEY="your_openai_api_key_here"
-   
+
    # Required for MongoDB (running history storage)
    MONGODB_URI="mongodb://localhost:27017/"
    MONGODB_DATABASE="polymarket_agent"
-   
+
    # Optional - for news integration
    NEWSAPI_API_KEY="your_newsapi_key_here"
-   
+
    # Optional - for web search
    TAVILY_API_KEY="your_tavily_key_here"
    ```
-   
+
    **Important Notes:**
    - Never commit your `.env` file to version control
-   - Keep your `POLYGON_WALLET_PRIVATE_KEY` secure and never share it
+   - Keep your private keys secure and never share them
+   - **BlockRun x402**: Pay-per-request LLM access via micropayments on Base. Your private key never leaves your machine - only signatures are sent. Get USDC on Base to start. Learn more at [blockrun.ai](https://blockrun.ai)
    - MongoDB is used to store running history (CLI commands, trades, LLM queries, etc.)
    - If MongoDB is not available, the application will continue to work but history won't be saved
    - You can get a NewsAPI key from [newsapi.org](https://newsapi.org/)
