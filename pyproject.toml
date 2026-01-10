@@ -49,6 +49,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+blockrun = [
+    "blockrun-llm>=0.1.0",
+]
 dev = [
     "ruff>=0.6.0",
     "mypy>=1.11.0",

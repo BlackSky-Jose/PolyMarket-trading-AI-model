@@ -16,6 +16,9 @@ from agents.application.prompts import Prompter
 from agents.polymarket.polymarket import Polymarket
 from agents.utils.history import get_history_logger
 
+# BlockRun x402 integration - pay-per-request LLM
+from agents.connectors.blockrun import BlockRunLLM
+
 logger = logging.getLogger(__name__)
 
 def retain_keys(data, keys_to_retain):
@@ -31,7 +34,7 @@ def retain_keys(data, keys_to_retain):
         return data
 
 class Executor:
-    def __init__(self, default_model: str = 'gpt-4o-mini') -> None:
+    def __init__(self, default_model: str = 'gpt-4o-mini', use_blockrun: bool = None) -> None:
         load_dotenv()
         max_token_model: Dict[str, int] = {
             'gpt-3.5-turbo-16k': 15000,
@@ -41,13 +44,33 @@ class Executor:
         }
         self.token_limit = max_token_model.get(default_model, 128000)
         self.prompter = Prompter()
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not self.openai_api_key:
-            logger.warning("OPENAI_API_KEY not found in environment")
-        self.llm = ChatOpenAI(
-            model=default_model,
-            temperature=0,
-        )
+
+        # Determine which LLM backend to use
+        # Priority: use_blockrun param > BLOCKRUN_WALLET_KEY env > OPENAI_API_KEY env
+        blockrun_key = os.getenv("BLOCKRUN_WALLET_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+
+        if use_blockrun is None:
+            use_blockrun = bool(blockrun_key)
+
+        if use_blockrun and blockrun_key:
+            # Use BlockRun x402 pay-per-request
+            logger.info("Using BlockRun LLM (x402 pay-per-request)")
+            self.llm = BlockRunLLM(
+                model=f"openai/{default_model}",
+                temperature=0,
+            )
+            self.using_blockrun = True
+        else:
+            # Fallback to direct OpenAI
+            if not openai_key:
+                logger.warning("Neither BLOCKRUN_WALLET_KEY nor OPENAI_API_KEY found")
+            self.llm = ChatOpenAI(
+                model=default_model,
+                temperature=0,
+            )
+            self.using_blockrun = False
+
         self.gamma = Gamma()
         self.chroma = Chroma()
         self.polymarket = Polymarket()
